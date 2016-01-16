@@ -1,0 +1,194 @@
+/*******************************************************************************************
+  SIMPL+ Module Information
+  (Fill in comments below)
+*******************************************************************************************/
+/*
+Dealer Name: Dark Side of the Room
+System Name: Pronto module ; v3
+System Number:
+Programmer: Marc-Etienne HUNEAU
+Comments: Mod. by SGToma
+*/
+
+/*******************************************************************************************
+  Compiler Directives
+  (Uncomment and declare compiler directives as needed)
+*******************************************************************************************/
+#SYMBOL_NAME "Pronto TSU9x00"
+// #HINT ""
+#DEFINE_CONSTANT DIGITAL_COUNT 1024
+#DEFINE_CONSTANT ANALOG_COUNT 1024
+#DEFINE_CONSTANT TEXT_COUNT 128
+
+#CATEGORY "14" // Touchpanel Interface
+// #DEFAULT_VOLATILE
+// #DIGITAL_EXPAND 
+// #ANALOG_SERIAL_EXPAND 
+// #OUTPUT_SHIFT 
+#DEFAULT_NONVOLATILE
+#ENABLE_STACK_CHECKING
+/*
+#HELP_BEGIN
+   (add additional lines of help lines)
+#HELP_END
+*/
+
+/*******************************************************************************************
+  Include Libraries
+  (Uncomment and include additional libraries as needed)
+*******************************************************************************************/
+// #CRESTRON_LIBRARY ""
+// #USER_LIBRARY ""
+
+/*******************************************************************************************
+  DIGITAL, ANALOG and SERIAL INPUTS and OUTPUTS
+  (Uncomment and declare inputs and outputs as needed)
+*******************************************************************************************/
+BUFFER_INPUT rx$[1024];
+DIGITAL_INPUT Digital[DIGITAL_COUNT,1];
+STRING_INPUT String$[TEXT_COUNT,1][256];
+
+STRING_OUTPUT tx$;
+DIGITAL_OUTPUT Press[DIGITAL_COUNT,1];
+/*******************************************************************************************
+  Structure Definitions
+  (Uncomment and define structure definitions as needed)
+  Note:  Be sure to initialize all declared STRING variables as needed
+         For example, in Function Main: struct.myString = "";
+*******************************************************************************************/
+/*
+STRUCTURE MyStruct1
+{
+};
+
+MyStruct1 struct;
+*/
+
+/*******************************************************************************************
+  Global Variables
+  (Uncomment and declare global variables as needed)
+  Note:  Be sure to initialize all declared STRING variables as needed
+         For example, in Function Main: myString = "";
+*******************************************************************************************/
+// INTEGER
+// LONG_INTEGER
+// SIGNED_INTEGER
+// SIGNED_LONG_INTEGER
+// STRING
+INTEGER StartPos, StrLen;
+INTEGER actual_digital, actual_text;
+
+STRING tempStr[400], searchStr[10];
+
+/*******************************************************************************************
+  Functions
+  (Add any additional functions here)
+  Note:  Functions must be physically placed before the location in
+         the code that calls them.
+*******************************************************************************************/
+/*
+Function MyFunction1()
+{
+    // TODO:  Add local variable declarations here
+
+    // TODO:  Add code here
+}
+*/
+
+
+/*******************************************************************************************
+  Event Handlers
+  (Uncomment and declare additional event handlers as needed)
+*******************************************************************************************/
+CHANGE rx$
+{
+STRING DATA$[10], CLEAR[10], LF[1];
+INTEGER join, i,x;
+	 LF = CHR(10);
+	 WHILE (LEN(RX$))
+  		{  
+		  	x = FIND(LF, RX$);//Searches for \x0A
+            IF (x) 
+              { 
+Print("found LF\n");
+                 DATA$ = LEFT(RX$, x);
+print("DATA$@left(RX$,x) =%s\n RX$=%S", DATA$, RX$);
+				 join = atoi(DATA$);					
+						if (FIND ("DN", DATA$))
+						{
+						print("event = DN\n");
+						Press[join] = 1; // high           
+						print("Press[%i] = 1\n", join);
+						}
+						else if (FIND ("UP",DATA$))
+						{
+						print("event = DN\n");
+						Press[join] = 0; // high           
+						print("Press[%i] = 0\n", join);
+						}
+						else if (FIND ("REFRESH",DATA$))
+						{
+						for (join= 1 to actual_digital) 
+							{
+								if (Digital[join] = 1)
+									tx$ = "DN," + itoa(join) + "\x0A";
+								else
+									tx$ = "UP," + itoa(join) + "\x0A";
+							}
+							for (join = 1 to actual_text)
+							{
+								tx$ = "TX," + itoa(join) + "," + String$[join] + "\x0A";
+							}
+						}
+				CLEAR = REMOVE ( LF,RX$);
+                print("RX$=%s\nCLEAR=%S", RX$,CLEAR);
+		        } 
+			}
+	}              
+                     
+push Digital
+{
+	// example string : DN,201\x0A (Digital Press Join)
+	integer join;
+	join = GetLastModifiedArrayIndex();
+	tx$ = "DN," + itoa(join) + "\x0A";
+}
+release Digital
+{
+	// example string : UP,201\x0A (Digital Release Join)
+	integer join;
+	join = GetLastModifiedArrayIndex();
+	tx$ = "UP," + itoa(join) + "\x0A";
+} 
+change String$
+{
+	// example string : TX,201,<a string>\x0A (Ascii Join)
+	integer join;
+	join = GetLastModifiedArrayIndex();
+	tx$ = "TX," + itoa(join) + "," + String$[join] + "\x0A";
+}
+/*
+change Analog
+{
+	// example string : TX,201,<a string>\x0A (Ascii Join)
+	integer join;
+	join = GetLastModifiedArrayIndex();
+	tx$ = "AN," + itoa(join) + "," + itoa(Analog[join]) + "\x0A";
+}
+*/
+/*******************************************************************************************
+  Main()                                                                                    
+  Uncomment and place one-time startup code here
+  (This code will get called when the system starts up)
+*******************************************************************************************/
+Function Main()
+{
+	FOR (actual_digital = DIGITAL_COUNT to 1 Step -1)
+		IF (IsSignalDefined(Digital[actual_digital]))
+			Break;
+
+	FOR (actual_text = TEXT_COUNT to 1 Step -1)
+		IF (IsSignalDefined(String$[actual_text]))
+			Break;
+}
+
