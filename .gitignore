@@ -1,0 +1,8 @@
+*.sig
+*.spz
+*_CrosspointList.txt
+*_archive.zip
+*_compiled.zip
+SPlsWork/
+*.smw.ASV
+*.sm2
