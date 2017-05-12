@@ -1,0 +1,422 @@
+/***********************************************************************************
+  SIMPL+ Module Information
+  (Fill in comments below)
+***********************************************************************************/
+/*
+Dealer Name:	Crestron Electronics
+System Name:
+System Number:
+Programmer:		PAC
+Comments:
+*/
+/***********************************************************************************
+  Compiler Directives
+  (Uncomment and declare compiler directives as needed)
+***********************************************************************************/
+#SYMBOL_NAME "Integra DTR-60.6 IP Volume/Tuner Control v1.0"
+// #HINT ""
+#DEFINE_CONSTANT	ciMAXVOLUME	100
+#DEFINE_CONSTANT	ciMINVOLUME	0
+#DEFINE_CONSTANT	ciXMLEN		3
+#DEFINE_CONSTANT	ciTUNERLEN	5
+
+#DEFINE_CONSTANT	ciKEYBACK	11
+#DEFINE_CONSTANT	ciKEYCLEAR	12
+#DEFINE_CONSTANT	ciKEYENTER	13
+
+#DEFINE_CONSTANT	ciAM		1
+#DEFINE_CONSTANT	ciFM		2
+
+#DEFINE_CONSTANT	csHEADER1		"ISCP\x00\x00\x00\x10\x00\x00\x00"
+#DEFINE_CONSTANT	csHEADER2		"\x01\x00\x00\x00"
+// #CATEGORY "" 
+#DEFAULT_VOLATILE
+// #ENABLE_TRACE
+// #DEFAULT_NONVOLATILE
+#HELP_BEGIN
+	For use inside the Integra DTR-60.6 IP v1.1 module only.
+#HELP_END
+/***********************************************************************************
+  DIGITAL, ANALOG and SERIAL INPUTS and OUTPUTS
+  (Uncomment and declare inputs and outputs as needed)
+***********************************************************************************/
+DIGITAL_INPUT	Volume_Up, Volume_Down, Volume_Done,
+				Tuner_Key[13];
+ANALOG_INPUT	Volume_In, Selected_Tuner;
+BUFFER_INPUT	Tuner_Command$[6], Volume_Command$[6], Tuner_Frequency_In[10];
+
+ANALOG_OUTPUT	Volume_Fb;
+STRING_OUTPUT	Tuner_Frequency$, To_Device$;
+/***********************************************************************************
+  Global Variables
+  (Uncomment and declare global variables as needed)
+  Note:  Be sure to initialize all declared STRING variables as needed
+         For example, in Function Main: myString = "";
+***********************************************************************************/
+INTEGER	iVolChanging, iVolCounter;
+SIGNED_INTEGER iVol;
+STRING	sFreq[5], sTuner[6], sVolume[6], sFreqIn[10], sTemp[20];
+/***********************************************************************************
+  Event Handlers
+  (Uncomment and declare additional event handlers as needed)
+***********************************************************************************/
+PUSH Tuner_Key
+{
+	INTEGER iTemp;
+	
+	iTemp = getlastmodifiedarrayindex();
+	if(iTemp <> 100)
+	{
+		cswitch(Selected_Tuner)
+		{
+			case(ciAM):
+			{
+				if(iTemp >= 10)
+				{
+					if(iTemp = 10)
+					{
+						if(len(sFreq) < ciTUNERLEN)
+						{
+							makestring(sFreq, "%s0", sFreq);
+							makestring(Tuner_Frequency$, "%s kHz", sFreq);
+							iTemp = 100;
+						}
+						else
+						{
+							iTemp = 100;
+						}
+					}
+					else if(iTemp = ciKEYBACK)
+					{
+						if(len(sFreq) > 0)
+						{
+							sFreq = left(sFreq, len(sFreq) - 1);
+							makestring(Tuner_Frequency$, "%s kHz", sFreq);
+							iTemp = 100;
+						}
+					}
+					else if(iTemp = ciKEYCLEAR)
+					{
+						sFreq = "";
+						Tuner_Frequency$ = sFreqIn;
+						iTemp = 100;
+					}
+					else if(itemp = ciKEYENTER)
+					{
+						while(len(sFreq) < ciTUNERLEN)
+						{
+							sFreq = "0" + sFreq;
+						}
+						makestring(sTemp, "%s%s\r", sTuner, sFreq);
+						makestring(To_Device$, "%s%s%s%s", csHEADER1, chr(len(sTemp)), csHEADER2, sTemp);
+						sFreq = "";
+						iTemp = 100;
+					}
+				}
+				else
+				{
+					if(len(sFreq) < ciTUNERLEN)
+					{
+						makestring(sFreq, "%s%d", sFreq, iTemp);
+						makestring(Tuner_Frequency$, "%s kHz", sFreq);
+						iTemp = 100;
+					}
+					else
+					{
+						iTemp = 100;
+					}
+				}
+				break;
+			}
+			case(ciFM):
+			{
+				if(iTemp >= 10)
+				{
+					if(iTemp = 10)
+					{
+						if(len(sFreq) < ciTUNERLEN)
+						{
+							makestring(sFreq, "%s0", sFreq);
+							if(len(sFreq) = 5)
+							{
+								makestring(Tuner_Frequency$, "%s.%s MHz", left(sFreq, len(sFreq) - 2), right(sFreq, 2));
+							}
+							else if(len(sFreq) = 4)
+							{
+								if((byte(sFreq, 1) = 0x38) || (byte(sFreq, 1) = 0x39))
+								{
+									makestring(Tuner_Frequency$, "%s.%s MHz", left(sFreq, len(sFreq) - 2), right(sFreq, 2));
+								}
+								else
+								{
+									makestring(Tuner_Frequency$, "%s.%s MHz", left(sFreq, len(sFreq) - 1), right(sFreq, 1));
+								}
+							}
+							else if(len(sFreq) = 3)
+							{
+								if((byte(sFreq, 1) = 0x38) || (byte(sFreq, 1) = 0x39))
+								{
+									makestring(Tuner_Frequency$, "%s.%s MHz", left(sFreq, len(sFreq) - 1), right(sFreq, 1));
+								}
+								else
+								{
+									makestring(Tuner_Frequency$, "%s MHz", sFreq);
+								}
+							}
+							else if(len(sFreq) = 2)
+							{
+								makestring(Tuner_Frequency$, "%s MHz", sFreq);
+							}
+							else
+							{
+								makestring(Tuner_Frequency$, "%s MHz", sFreq);
+							}
+							iTemp = 100;
+						}
+						else
+						{
+							iTemp = 100;
+						}
+					}
+					else if(iTemp = ciKEYBACK)
+					{
+						if(len(sFreq) > 0)
+						{
+							sFreq = left(sFreq, len(sFreq) - 1);
+							if(len(sFreq) = 5)
+							{
+								makestring(Tuner_Frequency$, "%s.%s MHz", left(sFreq, len(sFreq) - 2), right(sFreq, 2));
+							}
+							else if(len(sFreq) = 4)
+							{
+								if((byte(sFreq, 1) = 0x38) || (byte(sFreq, 1) = 0x39))
+								{
+									makestring(Tuner_Frequency$, "%s.%s MHz", left(sFreq, len(sFreq) - 2), right(sFreq, 2));
+								}
+								else
+								{
+									makestring(Tuner_Frequency$, "%s.%s MHz", left(sFreq, len(sFreq) - 1), right(sFreq, 1));
+								}
+							}
+							else if(len(sFreq) = 3)
+							{
+								if((byte(sFreq, 1) = 0x38) || (byte(sFreq, 1) = 0x39))
+								{
+									makestring(Tuner_Frequency$, "%s.%s MHz", left(sFreq, len(sFreq) - 1), right(sFreq, 1));
+								}
+								else
+								{
+									makestring(Tuner_Frequency$, "%s MHz", sFreq);
+								}
+							}
+							else if(len(sFreq) = 2)
+							{
+								makestring(Tuner_Frequency$, "%s MHz", sFreq);
+							}
+							else
+							{
+								makestring(Tuner_Frequency$, "%s MHz", sFreq);
+							}
+							iTemp = 100;
+						}
+					}
+					else if(iTemp = ciKEYCLEAR)
+					{
+						sFreq = "";
+						Tuner_Frequency$ = sFreqIn;
+						iTemp = 100;
+					}
+					else if(itemp = ciKEYENTER)
+					{
+						if(len(sFreq) = 3)
+						{
+							sFreq = "0" + sFreq + "0";
+						}
+						else if((len(sFreq) = 4) & (byte(sFreq, 4) <> 0x30))
+						{
+							sFreq = sFreq + "0";
+						}
+						else if(len(sFreq) = 4)
+						{
+							sFreq = "0" + sFreq;
+						}
+						makestring(sTemp, "%s%s\r", sTuner, sFreq);
+						makestring(To_Device$, "%s%s%s%s", csHEADER1, chr(len(sTemp)), csHEADER2, sTemp);
+//						makestring(To_Device$, "%s%s\r", sTuner, sFreq);
+						sFreq = "";
+						iTemp = 100;
+					}
+					else
+					{
+						iTemp = 100;
+					}
+				}
+				else
+				{
+					if(len(sFreq) < ciTUNERLEN)
+					{
+						makestring(sFreq, "%s%d", sFreq, iTemp);
+						if(len(sFreq) = 5)
+						{
+							makestring(Tuner_Frequency$, "%s.%s MHz", left(sFreq, len(sFreq) - 2), right(sFreq, 2));
+						}
+						else if(len(sFreq) = 4)
+						{
+							if((byte(sFreq, 1) = 0x38) || (byte(sFreq, 1) = 0x39))
+							{
+								makestring(Tuner_Frequency$, "%s.%s MHz", left(sFreq, len(sFreq) - 2), right(sFreq, 2));
+							}
+							else
+							{
+								makestring(Tuner_Frequency$, "%s.%s MHz", left(sFreq, len(sFreq) - 1), right(sFreq, 1));
+							}
+						}
+						else if(len(sFreq) = 3)
+						{
+							if((byte(sFreq, 1) = 0x38) || (byte(sFreq, 1) = 0x39))
+							{
+								makestring(Tuner_Frequency$, "%s.%s MHz", left(sFreq, len(sFreq) - 1), right(sFreq, 1));
+							}
+							else
+							{
+								makestring(Tuner_Frequency$, "%s MHz", sFreq);
+							}
+						}
+						else if(len(sFreq) = 2)
+						{
+							makestring(Tuner_Frequency$, "%s MHz", sFreq);
+						}
+						else
+						{
+							makestring(Tuner_Frequency$, "%s MHz", sFreq);
+						}
+						iTemp = 100;
+					}
+					else
+					{
+						iTemp = 100;
+					}
+				}
+				break;
+			}
+			default:
+			{
+				iTemp = 100;
+				break;
+			}
+		}
+	}
+}
+
+PUSH Volume_Up
+{
+	if(iVol < ciMAXVOLUME)
+	{
+		iVolChanging = 1;
+		if(iVolCounter >= 5)
+		{
+			iVol = iVol + 2;
+		}
+		else
+		{
+			iVolCounter = iVolCounter + 1;
+			iVol = iVol + 1;
+		}
+
+#IF_SERIES2
+		if(iVol S> ciMAXVOLUME)
+		{
+			iVol = ciMAXVOLUME;
+		}
+#ENDIF
+#IF_SERIES3
+		if(iVol > ciMAXVOLUME)
+		{
+			iVol = ciMAXVOLUME;
+		}
+#ENDIF
+		Volume_Fb = iVol;
+		makestring(sTemp, "%s%02X\r", sVolume, iVol);
+		makestring(To_Device$, "%s%s%s%s", csHEADER1, chr(len(sTemp)), csHEADER2, sTemp);
+//		makestring(To_Device$, "%s%02X\r", sVolume, iVol);
+	}
+}
+
+PUSH Volume_Down
+{
+	if(iVol	> ciMINVOLUME)
+	{
+		iVolChanging = 1;
+		if(iVolCounter >= 5)
+		{
+			iVol = iVol - 2;
+		}
+		else
+		{
+			iVolCounter = iVolCounter + 1;
+			iVol = iVol - 1;
+		}
+#IF_SERIES2
+		if(iVol S< ciMINVOLUME)
+		{
+			iVol = ciMINVOLUME;
+		}
+#ENDIF
+#IF_SERIES3
+		if(iVol < ciMINVOLUME)
+		{
+			iVol = ciMINVOLUME;
+		}
+#ENDIF
+		Volume_Fb = iVol;
+		makestring(sTemp, "%s%02X\r", sVolume, iVol);
+		makestring(To_Device$, "%s%s%s%s", csHEADER1, chr(len(sTemp)), csHEADER2, sTemp);
+//		makestring(To_Device$, "%s%02X\r", sVolume, iVol);
+	}
+}
+
+RELEASE Volume_Done
+{
+	iVolChanging = 0;
+	iVolCOunter = 0;
+}
+
+CHANGE Volume_In
+{
+	if((Volume_In <= ciMAXVOLUME) && (Volume_In >= ciMINVOLUME) && (iVolChanging = 0) && (Volume_In <> iVol))
+	{
+		iVol = Volume_In;
+		Volume_Fb = iVol;
+	}
+}
+
+CHANGE Tuner_Command$
+{
+	sTuner = Tuner_Command$;
+}
+
+CHANGE Volume_Command$
+{
+	sVolume = Volume_Command$;
+}
+
+CHANGE Tuner_Frequency_In
+{
+	sFreqIn = Tuner_Frequency_In;
+	clearbuffer(Tuner_Frequency_In);
+	if(len(sFreq) = 0)
+	{
+		Tuner_Frequency$ = sFreqIn;
+	}
+}
+/***********************************************************************************
+  Main()
+  Uncomment and place one-time startup code here
+  (This code will get called when the system starts up)
+***********************************************************************************/
+Function Main()
+{
+	iVolChanging = 0;
+	iVolCounter = 0;
+	iVol = 0;
+}

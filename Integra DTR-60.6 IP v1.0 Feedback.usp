@@ -1,0 +1,615 @@
+/***********************************************************************************
+  SIMPL+ Module Information
+  (Fill in comments below)
+***********************************************************************************/
+/*
+Dealer Name:	Crestron Electronics
+System Name:
+System Number:
+Programmer:		PAC
+Comments:
+*/
+/***********************************************************************************
+  Compiler Directives
+  (Uncomment and declare compiler directives as needed)
+***********************************************************************************/
+#SYMBOL_NAME "Integra DTR-60.6 IP Feedback Processor v1.0"
+// #HINT ""
+#DEFINE_CONSTANT	ciKEYBACK		11
+#DEFINE_CONSTANT	ciKEYCLEAR		12
+#DEFINE_CONSTANT	ciKEYENTER		13
+
+#DEFINE_CONSTANT	ciFM			1
+
+#DEFINE_CONSTANT	csSLEEP				"!1SLP"
+#DEFINE_CONSTANT	csTUNER				"!1TUN"
+#DEFINE_CONSTANT	csTUNERZONE			"!1TUZ"
+#DEFINE_CONSTANT	csTUNER3			"!1TU3"
+#DEFINE_CONSTANT	csTUNER4			"!1TU4"
+#DEFINE_CONSTANT	csVOLUME			"!1MVL"
+#DEFINE_CONSTANT	csVOLUMEZONE		"!1ZVL"
+#DEFINE_CONSTANT	csVOLUME3			"!1VL3"
+#DEFINE_CONSTANT	csVOLUME4			"!1VL4"
+#DEFINE_CONSTANT	csNETLINEASCII		"!1NLSA"
+#DEFINE_CONSTANT	csNETLINEUNICODE	"!1NLSU"
+#DEFINE_CONSTANT	csNETLINECURSOR		"!1NLSC"
+#DEFINE_CONSTANT	csNATARTIST			"!1NAT"
+#DEFINE_CONSTANT	csNATALBUM			"!1NAL"
+#DEFINE_CONSTANT	csNATTITLE			"!1NTI"
+#DEFINE_CONSTANT	csNATTIME			"!1NTM"
+#DEFINE_CONSTANT	csNATTRACK			"!1NTR"
+#DEFINE_CONSTANT	csNATSTATUS			"!1NST"
+#DEFINE_CONSTANT	csNETSOURCE			"!1NSV"
+#DEFINE_CONSTANT	csNETWAITING		"!1NKY"
+#DEFINE_CONSTANT	csNETPOPUP			"!1NPU"
+#DEFINE_CONSTANT	csCOVERART			"!1NJA"		
+
+#DEFINE_CONSTANT	csHEADER	"ISCP\x00\x00\x00\x10\x00\x00\x00\x00\x01\x00\x00\x00"
+#DEFINE_CONSTANT	csHEADER1	"ISCP\x00\x00\x00\x10\x00\x00\x00"
+#DEFINE_CONSTANT	csHEADER2	"\x01\x00\x00\x00"
+
+// #CATEGORY "" 
+#DEFAULT_VOLATILE
+// #DEFAULT_NONVOLATILE
+// #ENABLE_TRACE
+
+#HELP_BEGIN
+	For use inside the Integra DTR-60.6 IP v1.1 module only.
+#HELP_END
+/***********************************************************************************
+  DIGITAL, ANALOG and SERIAL INPUTS and OUTPUTS
+  (Uncomment and declare inputs and outputs as needed)
+***********************************************************************************/
+DIGITAL_INPUT	Net_FF_Rew_Pushed, Send_Keyboard, Process_From_Device; 
+ANALOG_INPUT	Tuner_Band_In;
+ANALOG_INPUT	Delimiter_Type;
+STRING_INPUT	Keyboard_Input_Text[128];
+BUFFER_INPUT	From_Device$[65000];
+
+DIGITAL_OUTPUT	Button_1_Highlighted, Button_2_Highlighted;
+ANALOG_OUTPUT	Sleep_Time, Main_Volume_In, Zone_2_Volume_In, Zone_3_Volume_In,
+				Zone_4_Volume_In;
+STRING_OUTPUT	Tuner_Frequency$, Tuner_Zone_Frequency$, Tuner_Zone_3_Frequency$,
+				Tuner_Zone_4_Frequency$, NAT_Artist$, NAT_Album$, NAT_Title$,
+				NAT_Time$, NAT_Play$, NAT_Repeat$, NAT_Shuffle$, NAT_Track$,
+				Popup_Type_Value, Top_Title_Text, Popup_Title_Text,
+				Popup_Message_Text, Item_Title_1_Text, Item_Parameter_1_Text,
+				Item_Title_2_Text, Item_Parameter_2_Text, Item_Title_3_Text,
+				Item_Parameter_3_Text, Item_Title_4_Text, Item_Parameter_4_Text,
+				Item_Title_5_Text, Item_Parameter_5_Text, Item_Title_6_Text,
+				Item_Parameter_6_Text, Button_1_Text, Button_2_Text, To_Device$;
+DIGITAL_OUTPUT	Net_Cursor_Position_Line[10];
+STRING_OUTPUT	Net_Line_Text[10];
+/***********************************************************************************
+  Global Variables
+  (Uncomment and declare global variables as needed)
+  Note:  Be sure to initialize all declared STRING variables as needed
+         For example, in Function Main: myString = "";
+***********************************************************************************/
+INTEGER	iTemp, iSleep, iFlag1, a, iVol, iVol2, iVol3, iTemp1, iVol4,
+		iCursorPosition, iTemp2, iTemp3, iNetDelay, iWaiting, iMarker1, iMarker2,
+		iMarker3, iMarker4, iMarker5, iMarker6, iMarker7, iMarker8, iMarker9,
+		iMarker10, iMarker11, iMarker12, iMarker13, iMarker14, iMarker15, iCursor,
+		iCursorPointer, iSemaphore;
+STRING	sTemp[10000], sTemp1[100], sTuner[24], sTunerZone[24],
+		sTuner3[24], sTuner4[24], sLineText[10][70], sNATArtist[70],
+		sNATAlbum[70], sNATTitle[70], sNATTime[70], sNATPlay[1], sNATRepeat[1],
+		sNATShuffle[1], sNATTrack[70], sTempCmd[25], sDisplayType[1], sTemp2[200],
+		sDelimiter[3];
+/***********************************************************************************
+  Event Handlers
+  (Uncomment and declare additional event handlers as needed)
+***********************************************************************************/
+PUSH Send_Keyboard
+{
+	if((len(Keyboard_Input_Text) > 0) && (iWaiting = 1))
+	{
+		makestring(sTempCmd, "%s%s\r", csNETWAITING, left(Keyboard_Input_Text, 128));
+		makestring(To_Device$, "%s%s%s%s", csHEADER1, chr(len(sTempCmd)), csHEADER2, sTempCmd);
+		iWaiting = 0;
+	}
+}
+
+RELEASE Net_FF_Rew_Pushed
+{
+	wait(500, wNetDelay)
+	{
+		iNetDelay = 0;
+		NAT_Play$ = sNATPlay;
+	}
+}
+
+PUSH Net_FF_Rew_Pushed
+{
+	cancelwait(wNetDelay);
+	iNetDelay = 1;
+}
+
+CHANGE From_Device$
+{
+	if(iSemaphore = 0)
+	{
+		iSemaphore = 1;
+	
+		while(1)
+		{
+			sTemp = gather("\x1A\x0D\x0A", From_Device$);
+			sTemp = right(sTemp, len(sTemp) - len(csHEADER));
+			sTemp = left(sTemp, len(sTemp) - 2);	
+			if(len(sTemp))
+			{
+				if(find(csCOVERART, sTemp) > 0)	// not using this info, but why go through the other "else-if"'s?
+				{
+					sTemp1 = "";	
+					sTemp = "";
+				}
+				else if(find(csSLEEP, sTemp) > 0)
+				{
+					iTemp1 = find(csSLEEP, sTemp);
+					sTemp1 = mid(sTemp, len(csSLEEP) + iTemp1, 2);
+					iTemp = hextoi(sTemp1);
+					if(iTemp <> iSleep)
+					{
+						iSleep = iTemp;
+						Sleep_Time = iSleep;
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csVOLUME, sTemp) > 0)
+				{
+					iTemp1 = find(csVOLUME, sTemp);
+					sTemp1 = mid(sTemp, len(csVOLUME) + iTemp1, 2);
+					iTemp = hextoi(sTemp1);
+					if(iTemp <> iVol)
+					{
+						iVol = iTemp;
+						Main_Volume_In = iVol;
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csVOLUMEZONE, sTemp) > 0)
+				{
+					iTemp1 = find(csVOLUMEZONE, sTemp);
+					sTemp1 = mid(sTemp, len(csVOLUMEZONE) + iTemp1, 2);
+					iTemp = hextoi(sTemp1);
+					if(iTemp <> iVol2)
+					{
+						iVol2 = iTemp;
+						Zone_2_Volume_In = iVol2;
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csVOLUME3, sTemp) > 0)
+				{
+					iTemp1 = find(csVOLUME3, sTemp);
+					sTemp1 = mid(sTemp, len(csVOLUME3) + iTemp1, 2);
+					iTemp = hextoi(sTemp1);
+					if(iTemp <> iVol3)
+					{
+						iVol3 = iTemp;
+						Zone_3_Volume_In = iVol3;
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csVOLUME4, sTemp) > 0)
+				{
+					iTemp1 = find(csVOLUME4, sTemp);
+					sTemp1 = mid(sTemp, len(csVOLUME4) + iTemp1, 2);
+					iTemp = hextoi(sTemp1);
+					if(iTemp <> iVol4)
+					{
+						iVol4 = iTemp;
+						Zone_4_Volume_In = iVol4;
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csTUNER, sTemp) > 0)
+				{
+					iTemp1 = find(csTUNER, sTemp);
+					sTemp1 = mid(sTemp, len(csTUNER) + iTemp1, len(sTemp) - len(CSTUNER) - iTemp1);
+					if(sTuner <> sTemp1)
+					{
+						makestring(sTuner, "%d", atoi(sTemp1));
+						if(Tuner_Band_In = ciFM)
+						{
+							makestring(Tuner_Frequency$, "%s.%s MHz", left(sTuner, len(sTuner) - 2), right(sTuner, 2));
+						}
+						else
+							{
+							makestring(Tuner_Frequency$, "%s kHz", sTuner);
+						}
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csTUNERZONE, sTemp) > 0)
+				{
+					iTemp1 = find(csTUNERZONE, sTemp);
+					sTemp1 = mid(sTemp, len(csTUNERZONE) + iTemp1, len(sTemp) - len(csTUNERZONE) - iTemp1);
+					if(sTunerZone <> sTemp1)
+					{
+						makestring(sTunerZone, "%d", atoi(sTemp1));
+						if(Tuner_Band_In = ciFM)
+						{
+							makestring(Tuner_Zone_Frequency$, "%s.%s MHz", left(sTunerZone, len(sTunerZone) - 2), right(sTunerZone, 2));
+						}
+						else
+						{
+							makestring(Tuner_Zone_Frequency$, "%s kHz", sTunerZone);
+						}
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csTUNER3, sTemp) > 0)
+				{
+					iTemp1 = find(csTUNER3, sTemp);
+					sTemp1 = mid(sTemp, len(csTUNER3) + iTemp1, len(sTemp) - len(csTUNER3) - iTemp1);
+					if(sTuner3 <> sTemp1)
+					{
+						makestring(sTuner3, "%d", atoi(sTemp1));
+						if(Tuner_Band_In = ciFM)
+						{
+							makestring(Tuner_Zone_3_Frequency$, "%s.%s MHz", left(sTuner3, len(sTuner3) - 2), right(sTuner3, 2));
+						}
+						else
+						{
+							makestring(Tuner_Zone_3_Frequency$, "%s kHz", sTuner3);
+						}
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csTUNER4, sTemp) > 0)
+				{
+					iTemp1 = find(csTUNER4, sTemp);
+						sTemp1 = mid(sTemp, len(csTUNER4) + iTemp1, len(sTemp) - len(csTUNER4) - iTemp1);
+					if(sTuner4 <> sTemp1)
+					{
+						makestring(sTuner4, "%d", atoi(sTemp1));
+						if(Tuner_Band_In = ciFM)
+						{
+							makestring(Tuner_Zone_4_Frequency$, "%s.%s MHz", left(sTuner4, len(sTuner4) - 2), right(sTuner4, 2));
+						}
+						else
+						{
+							makestring(Tuner_Zone_4_Frequency$, "%s kHz", sTuner4);
+						}
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csNETLINEASCII, sTemp) > 0)
+				{
+					iTemp1 = find(csNETLINEASCII, sTemp);
+					iTemp2 = atoi(mid(sTemp, iTemp1 + 2, 8)) + 1;
+					iTemp3 = find("\x1A", sTemp);
+					sTemp1 = mid(sTemp, 9, iTemp3 - 9);
+					iMarker1 = 0;
+					iMarker1 = find("\x00", sTemp1);
+					if(iMarker1 > 0)
+					{
+						sTemp1 = left(sTemp1, iMarker1 - 1);
+						iMarker1 = 0;
+					}
+					if(sLineText[iTemp2] <> sTemp1)
+					{
+						sLineText[iTemp2] = sTemp1;
+						Net_Line_Text[iTemp2] = sLineText[iTemp2];
+					}
+				}
+				else if(find(csNETLINEUNICODE, sTemp) > 0)
+				{
+					iTemp1 = find(csNETLINEUNICODE, sTemp);
+					iTemp2 = atoi(mid(sTemp, iTemp1 + 2, 5)) + 1;
+					iTemp3 = find("\x1A", sTemp);
+					sTemp1 = mid(sTemp, 9, iTemp3 - 9);
+					iMarker1 = 0;
+					iMarker1 = find("\x00", sTemp1);
+					if(iMarker1 > 0)
+					{
+						sTemp1 = left(sTemp1, iMarker1 - 1);
+						iMarker1 = 0;
+					}
+					if(sLineText[iTemp2] <> sTemp1)
+					{
+						sLineText[iTemp2] = sTemp1;
+						Net_Line_Text[iTemp2] = sLineText[iTemp2];
+					}
+				}
+				else if(find(csNETLINECURSOR, sTemp) > 0)
+				{
+					iTemp1 = find(csNETLINECURSOR, sTemp);
+					iTemp2 = atoi(mid(sTemp, iTemp1 + 2, 8)) + 1;
+					if(mid(sTemp, 7, 1) = "-")
+					{
+						iTemp2 = 0;
+					}
+					if(iCursorPosition <> iTemp2)
+					{
+						iCursorPosition = iTemp2;
+						for(a = 1 to 10)
+						{
+							Net_Cursor_Position_Line[a] = 0;
+						}
+						if(iCursorPosition > 0)
+						{
+							Net_Cursor_Position_Line[iCursorPosition] = 1;
+						}
+					}
+					if(find("P", mid(sTemp, 8, 1)) > 0)
+					{
+						for(a = 1 to 10)
+						{
+							sLineText[a] = "";
+							Net_Line_Text[a] = sLineText[a];
+						}
+					}
+				}
+				else if(find(csNATARTIST, sTemp) > 0)
+				{
+					iTemp1 = find(csNATARTIST, sTemp);
+					sTemp1 = mid(sTemp, len(csNATARTIST) + iTemp1, len(sTemp) - len(csNATARTIST) - iTemp1);
+					if(sNATArtist <> sTemp1)
+					{
+						sNATArtist = sTemp1;
+						NAT_Artist$ = sNATArtist;
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csNATALBUM, sTemp) > 0)
+				{
+					iTemp1 = find(csNATALBUM, sTemp);
+					sTemp1 = mid(sTemp, len(csNATALBUM) + iTemp1, len(sTemp) - len(csNATALBUM) - iTemp1);
+					if(sNATAlbum <> sTemp1)
+					{
+						sNATAlbum = sTemp1;
+						NAT_Album$ = sNATAlbum;
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csNATTITLE, sTemp) > 0)
+				{
+					iTemp1 = find(csNATTITLE, sTemp);
+					sTemp1 = mid(sTemp, len(csNATTITLE) + iTemp1, len(sTemp) - len(csNATTITLE) - iTemp1);
+					if(sNATTitle <> sTemp1)
+					{
+						sNATTitle = sTemp1;
+						NAT_Title$ = sNATTitle;
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csNATTIME, sTemp) > 0)
+				{
+					iTemp1 = find(csNATTIME, sTemp);
+					sTemp1 = mid(sTemp, len(csNATTIME) + iTemp1, len(sTemp) - len(csNATTIME) - iTemp1);
+					if(sNATTime <> sTemp1)
+					{
+						sNATTime = sTemp1;
+						NAT_Time$ = sNATTime;
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csNATTRACK, sTemp) > 0)
+				{
+					iTemp1 = find(csNATTRACK, sTemp);
+					sTemp1 = mid(sTemp, len(csNATTRACK) + iTemp1, len(sTemp) - len(csNATTRACK) - iTemp1);
+					if(sNATTrack <> sTemp1)
+					{
+						sNATTrack = sTemp1;
+						NAT_Track$ = sNATTrack;
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csNATSTATUS, sTemp) > 0)
+				{
+					iTemp1 = find(csNATARTIST, sTemp);
+					sTemp1 = chr(byte(sTemp, 6));
+					if(sNATPlay <> sTemp1)
+					{
+						if((sTemp1 = "P") && (iNetDelay <> 1))
+						{
+							sNATPlay = sTemp1;
+							NAT_Play$ = sNATPlay;
+						}
+						else if((sTemp1 = "P") && (iNetDelay = 1))
+						{
+							sNATPlay = sTemp1;
+						}
+						else
+						{
+							sNATPlay = sTemp1;
+							NAT_Play$ = sNATPlay;
+						}
+					}
+					sTemp1 = chr(byte(sTemp, 7));
+					if(sNATRepeat <> sTemp1)
+					{
+						sNATRepeat = sTemp1;
+						NAT_Repeat$ = sNATRepeat;
+					}
+					sTemp1 = chr(byte(sTemp, 8));
+					if(sNATShuffle <> sTemp1)
+					{
+						sNATShuffle = sTemp1;
+						NAT_Shuffle$ = sNATShuffle;
+					}
+					sTemp1 = "";
+					sTemp = "";
+				}
+				else if(find(csNETWAITING, sTemp) > 0)
+				{
+					if(find("00", sTemp) > 0)
+					{
+						iWaiting = 0;
+					}
+					else 
+					{
+						iWaiting = 1;
+					}
+				}
+				else if(find(csNETPOPUP, sTemp) > 0)
+				{
+					sDisplayType = mid(sTemp, 6, 1);
+					Popup_Type_Value = sDisplayType;
+					if(sDisplayType = "T")
+					{//NPUTTop Title\x00Popup Title\x00Popup Message\x002Text Button 1\x00Text Button 2\x00\x1A
+						iMarker1 = find("\x00", sTemp);
+						iMarker2 = find("\x00", sTemp, iMarker1 + 1);
+						iMarker3 = find("\x00", sTemp, iMarker2 + 1);
+						iMarker4 = find("\x00", sTemp, iMarker3 + 1);
+						iMarker5 = find("\x00", sTemp, iMarker4 + 1);
+						Top_Title_Text = mid(sTemp, 7, iMarker1 - 7);
+						Popup_Title_Text = mid(sTemp, iMarker1 + 1, iMarker2 - (iMarker1 + 1));
+						Popup_Message_Text = mid(sTemp, iMarker2 + 1, iMarker3 - (iMarker2 + 1));
+						iCursorPointer = iMarker3 + 1;
+						iCursor = atoi(mid(sTemp, iMarker3 + 1, 1));
+						switch(iCursor)
+						{
+							case(0):
+							{
+								Button_1_Highlighted = 0;
+								Button_2_Highlighted = 0;
+							}
+							case(1):
+							{
+								Button_2_Highlighted = 0;
+								Button_1_Highlighted = 1;
+							}
+							case(2):
+							{
+								Button_1_Highlighted = 0;
+								Button_2_Highlighted = 1;
+							}
+						}
+						Button_1_Text = mid(sTemp, iMarker3 + 2, iMarker4 - (iMarker3 + 2));
+						Button_2_Text = mid(sTemp, iMarker4 + 1, iMarker5 - (iMarker4 + 1));
+					}
+					else if(sDisplayType = "B")
+					{//NPUBTop Title\x00Popup Title\x00Popup Message\x000\x00\x00\x1A
+						iMarker1 = find("\x00", sTemp);
+						iMarker2 = find("\x00", sTemp, iMarker1 + 1);
+						iMarker3 = find("\x00", sTemp, iMarker2 + 1);
+						iMarker4 = find("\x00", sTemp, iMarker3 + 1);
+						iMarker5 = find("\x00", sTemp, iMarker4 + 1);
+						Top_Title_Text = mid(sTemp, 7, iMarker1 - 7);
+						Popup_Title_Text = mid(sTemp, iMarker1 + 1, iMarker2 - (iMarker1 + 1));
+						Popup_Message_Text = mid(sTemp, iMarker2 + 1, iMarker3 - (iMarker2 + 1));
+						iCursorPointer = iMarker3 + 1;
+						iCursor = atoi(mid(sTemp, iMarker3 + 1, 1));
+						switch(iCursor)
+						{
+							case(0):
+							{
+								Button_1_Highlighted = 0;
+								Button_2_Highlighted = 0;
+							}
+							case(1):
+							{
+								Button_2_Highlighted = 0;
+								Button_1_Highlighted = 1;
+							}
+							case(2):
+							{
+								Button_1_Highlighted = 0;
+								Button_2_Highlighted = 1;
+							}
+						}
+						Button_1_Text = mid(sTemp, iMarker3 + 2, iMarker4 - (iMarker3 + 2));
+						Button_2_Text = mid(sTemp, iMarker4 + 1, iMarker5 - (iMarker4 + 1));
+					}
+					else if(sDisplayType = "L")
+					{//NPULTop Title\x00Popup Title\x00Item Title 1\x00Item Parameter 1\x00Item Title 2\x00Item Parameter 2\x00
+					 //Item Title 3\x00Item Parameter 3\x00Item Title 4\x00Item Parameter 4\x00Item Title 5\x00Item Parameter 5\x00
+					 //Item Title 6\x00Item Parameter 6\x001Text Button 1\x00Text Button 2\x00\x1A
+						iMarker1 = find("\x00", sTemp);
+						iMarker2 = find("\x00", sTemp, iMarker1 + 1);
+						iMarker3 = find("\x00", sTemp, iMarker2 + 1);
+						iMarker4 = find("\x00", sTemp, iMarker3 + 1);
+						iMarker5 = find("\x00", sTemp, iMarker4 + 1);
+						iMarker6 = find("\x00", sTemp, iMarker5 + 1);
+						iMarker7 = find("\x00", sTemp, iMarker6 + 1);
+						iMarker8 = find("\x00", sTemp, iMarker7 + 1);
+						iMarker9 = find("\x00", sTemp, iMarker8 + 1);
+						iMarker10 = find("\x00", sTemp, iMarker9 + 1);
+						iMarker11 = find("\x00", sTemp, iMarker10 + 1);
+						iMarker12 = find("\x00", sTemp, iMarker11 + 1);
+						iMarker13 = find("\x00", sTemp, iMarker12 + 1);
+						iMarker14 = find("\x00", sTemp, iMarker13 + 1);
+						iMarker15 = find("\x00", sTemp, iMarker14 + 1);
+						Top_Title_Text = mid(sTemp, 7, iMarker1 - 7);
+						Item_Title_1_Text = mid(sTemp, iMarker1 + 1, iMarker2 - (iMarker1 + 1));
+						Item_Parameter_1_Text = mid(sTemp, iMarker2 + 1, iMarker3 - (iMarker2 + 1));
+						Item_Title_2_Text = mid(sTemp, iMarker3 + 1, iMarker4 - (iMarker3 + 1));
+						Item_Parameter_2_Text = mid(sTemp, iMarker4 + 1, iMarker5 - (iMarker4 + 1));
+						Item_Title_3_Text = mid(sTemp, iMarker1 + 1, iMarker6 - (iMarker5 + 1));
+						Item_Parameter_3_Text = mid(sTemp, iMarker1 + 1, iMarker7 - (iMarker6 + 1));
+						Item_Title_4_Text = mid(sTemp, iMarker1 + 1, iMarker8 - (iMarker7 + 1));
+						Item_Parameter_4_Text = mid(sTemp, iMarker1 + 1, iMarker9 - (iMarker8 + 1));
+						Item_Title_5_Text = mid(sTemp, iMarker1 + 1, iMarker10 - (iMarker9 + 1));
+						Item_Parameter_5_Text = mid(sTemp, iMarker1 + 1, iMarker11 - (iMarker10 + 1));
+						Item_Title_6_Text = mid(sTemp, iMarker1 + 1, iMarker12 - (iMarker11 + 1));
+						Item_Parameter_6_Text = mid(sTemp, iMarker1 + 1, iMarker13 - (iMarker12 + 1));
+						iCursorPointer = iMarker13 + 1;
+						iCursor = atoi(mid(sTemp, iMarker13 + 1, 1));
+						switch(iCursor)
+						{
+							case(0):
+							{
+								Button_1_Highlighted = 0;
+								Button_2_Highlighted = 0;
+							}
+							case(1):
+							{
+								Button_2_Highlighted = 0;
+								Button_1_Highlighted = 1;
+							}
+							case(2):
+							{
+								Button_1_Highlighted = 0;
+								Button_2_Highlighted = 1;
+							}
+						}
+						Button_1_Text = mid(sTemp, iMarker13 + 2, iMarker14 - (iMarker13 + 2));
+						Button_2_Text = mid(sTemp, iMarker14 + 1, iMarker15 - (iMarker14 + 1));
+					}
+				}
+			}
+		}
+		iSemaphore = 0;
+	}
+}
+
+CHANGE Delimiter_Type	// there are three different Delimiter types depending on the model receiver being used
+{
+	cswitch(Delimiter_Type)
+	{
+		case(1): { sDelimiter = "\x1A";			break; }
+		case(2): { sDelimiter = "\x1A\x0D";		break; }
+		case(3): { sDelimiter = "\x1A\x0D\x0A";	break; }
+	}
+}
+/***********************************************************************************
+  Main()
+  Uncomment and place one-time startup code here
+  (This code will get called when the system starts up)
+***********************************************************************************/
+Function Main()
+{
+	iFlag1 = 0;
+	sTemp = "";
+	sTemp1 = "";
+	iTemp = 100;
+	iNetDelay = 0;
+	iSemaphore = 0;
+}
