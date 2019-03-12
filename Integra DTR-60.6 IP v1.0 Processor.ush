@@ -21,7 +21,8 @@
   Name=Integra DTR-60.6 IP Volume/Tuner Control v1.0
   SmplCName=Integra DTR-60.6 IP v1.0 Processor.usp
   Code=1
-  SysRev5=1.019
+  SysRev5=4.000
+  SMWRev=2.02.05
   InputCue1=Volume_Up
   InputSigType1=Digital
   InputCue2=Volume_Down

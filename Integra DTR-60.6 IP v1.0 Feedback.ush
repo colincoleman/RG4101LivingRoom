@@ -21,7 +21,8 @@
   Name=Integra DTR-60.6 IP Feedback Processor v1.0
   SmplCName=Integra DTR-60.6 IP v1.0 Feedback.usp
   Code=1
-  SysRev5=3.137
+  SysRev5=4.000
+  SMWRev=2.02.05
   InputCue1=Net_FF_Rew_Pushed
   InputSigType1=Digital
   InputCue2=Send_Keyboard
